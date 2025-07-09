@@ -981,6 +981,23 @@ safe_on_update(function()
     
     -- Boss Mode: Skip normal rotation and spam all spells aggressively
     if boss_mode_enabled then
+        -- Boss Mode: Cast buffs immediately when there's an enemy to attack
+        if target_list and #target_list > 0 then
+            -- Add a delay to prevent spam in boss mode
+            local last_boss_buff_check = _G.last_boss_buff_check or 0
+            if current_time - last_boss_buff_check >= 0.5 then -- Check every 500ms instead of every frame
+                _G.last_boss_buff_check = current_time
+                
+                -- In boss mode, cast buffs for any enemy encounter, not just bosses/champions
+                local buff_casted, buff_spell = boss_buff_manager.process_boss_buff_rotation(target_list, target_selector_data_all, best_target, true)
+                if buff_casted then
+                    cast_end_time = current_time + 0.1 -- Fast buff casting in boss mode
+                    console.print("Boss mode: Cast " .. buff_spell .. " buff immediately")
+                    return -- Exit after casting buff to prioritize buffs
+                end
+            end
+        end
+        
         -- Cast penetrating shot as rapidly as possible (hold button behavior)
         local spell = spells["penetrating_shot"]
         if spell and spell.logics and utility.is_spell_ready(377137) and 
@@ -1066,10 +1083,9 @@ safe_on_update(function()
         console.print("Boss fight detected - enabling aggressive mode")
     end
     
-    -- Process boss buff rotation for boss/elite encounters
-    if (is_boss_fight or boss_buff_manager.is_boss_encounter(target_list, best_target)) and 
-       safe_get_menu_element(menu.menu_elements.boss_buff_management, true) then
-        local buff_casted, buff_spell = boss_buff_manager.process_boss_buff_rotation(target_list, target_selector_data_all, best_target)
+    -- Process boss buff rotation for boss/elite encounters (normal mode only)
+    if (is_boss_fight or boss_buff_manager.is_boss_encounter(target_list, best_target)) then
+        local buff_casted, buff_spell = boss_buff_manager.process_boss_buff_rotation(target_list, target_selector_data_all, best_target, false)
         if buff_casted then
             cast_end_time = current_time + 0.3
             console.print("Boss Buff Manager: Cast " .. buff_spell .. " for buff effect before penetrating shot")

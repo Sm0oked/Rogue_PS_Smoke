@@ -40,7 +40,6 @@ function enhancements_manager.render_enhancements_menu(menu_elements)
         menu_elements.enhanced_evade:render("Enhanced Evade", "Enable enhanced evade system with dash and shadow step integration")
         menu_elements.auto_resource_management:render("Auto Resource Management", "Automatically manage resources for optimal spell usage")
         menu_elements.auto_buff_management:render("Auto Buff Management", "Automatically maintain important buffs")
-        menu_elements.boss_buff_management:render("Boss Buff Management", "Automatically cast poison trap, caltrops, and smoke grenade for buff effects in boss/elite encounters")
         
         menu_elements.position_optimization:render("Position Optimization", "Automatically optimize positioning during combat")
         menu_elements.enhanced_debug_viz:render("Enhanced Debug", "Enable enhanced visual debugging")
