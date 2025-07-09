@@ -4,6 +4,7 @@ local spell_data = require("my_utility/spell_data")
 local spell_priority = require("spell_priority")
 local menu = require("menu")
 local enhancements_manager = require("my_utility/enhancements_manager")
+local boss_buff_manager = require("my_utility/boss_buff_manager")
 
 -- Add fallback checks for undefined variables at the top of the file
 local function safe_get_menu_element(element, fallback)
@@ -717,6 +718,11 @@ safe_on_update(function()
         enhancements_initialized = enhancements_manager.initialize(menu.menu_elements)
     end
     
+    -- Initialize boss buff manager if not done already
+    if not _G.boss_buff_manager_initialized then
+        _G.boss_buff_manager_initialized = boss_buff_manager.initialize()
+    end
+    
     -- Process stuck detection and auto-blacklisting
     local player_position = safe_get_player_position()
     if player_position then
@@ -975,16 +981,14 @@ safe_on_update(function()
     
     -- Boss Mode: Skip normal rotation and spam all spells aggressively
     if boss_mode_enabled then
-        -- Spam penetrating shot aggressively
-        while true do
-            local spell = spells["penetrating_shot"]
-            if not spell or not spell.logics then break end
-            if spell.menu_elements and not spell.menu_elements.main_boolean:get() then break end
-            -- Only check if spell is off cooldown and ready
-            if not utility.is_spell_ready(377137) then break end
+        -- Cast penetrating shot once per frame (simplified)
+        local spell = spells["penetrating_shot"]
+        if spell and spell.logics and utility.is_spell_ready(377137) and 
+           (not spell.menu_elements or spell.menu_elements.main_boolean:get()) then
             local result = spell.logics(target_list, target_selector_data_all, best_target)
-            if not result then break end
-            cast_end_time = current_time + 0.05 -- Faster casting in boss mode
+            if result then
+                cast_end_time = current_time + 0.05 -- Faster casting in boss mode
+            end
         end
         
         -- Boss Mode: Prioritize area control spells (smoke grenade, poison trap, caltrops)
@@ -1062,22 +1066,33 @@ safe_on_update(function()
         console.print("Boss fight detected - enabling aggressive mode")
     end
     
-    -- Spam penetrating shot aggressively first (like boss mode)
-    while true do
-        local spell = spells["penetrating_shot"]
-        if not spell or not spell.logics then break end
-        if spell.menu_elements and not spell.menu_elements.main_boolean:get() then break end
-        -- Only check if spell is off cooldown and ready
-        if not utility.is_spell_ready(377137) then break end
-        local result = spell.logics(target_list, target_selector_data_all, best_target)
-        if not result then 
-            if is_boss_fight then
+    -- Process boss buff rotation for boss/elite encounters
+    if (is_boss_fight or boss_buff_manager.is_boss_encounter(target_list, best_target)) and 
+       safe_get_menu_element(menu.menu_elements.boss_buff_management, true) then
+        local buff_casted, buff_spell = boss_buff_manager.process_boss_buff_rotation(target_list, target_selector_data_all, best_target)
+        if buff_casted then
+            cast_end_time = current_time + 0.3
+            console.print("Boss Buff Manager: Cast " .. buff_spell .. " for buff effect before penetrating shot")
+            return -- Exit after casting buff spell to prioritize buffs over penetrating shot
+        end
+    end
+    
+    -- Cast penetrating shot once per frame (simplified)
+    local spell = spells["penetrating_shot"]
+    if spell and spell.logics and utility.is_spell_ready(377137) and 
+       (not spell.menu_elements or spell.menu_elements.main_boolean:get()) then
+        -- Add a small delay to prevent too frequent calls
+        local last_penetrating_shot_attempt = _G.last_penetrating_shot_attempt or 0
+        if current_time - last_penetrating_shot_attempt >= 0.05 then -- 50ms delay between attempts
+            _G.last_penetrating_shot_attempt = current_time
+            local result = spell.logics(target_list, target_selector_data_all, best_target)
+            if result then
+                cast_end_time = current_time + 0.02 -- Fast casting like boss mode
+                return -- Exit after casting penetrating shot to prioritize it
+            elseif is_boss_fight then
                 console.print("Penetrating shot failed to cast in boss fight")
             end
-            break 
         end
-        cast_end_time = current_time + 0.02 -- Fast casting like boss mode
-        return -- Exit after casting penetrating shot to prioritize it
     end
     
     -- Check if spells were cast recently to prevent over-prioritization over penetrating shot
@@ -1292,17 +1307,15 @@ safe_on_update(function()
         ::continue::
     end
 
-    -- Meta build: Aggressive Penetrating Shot spamming as primary damage dealer
-    while true do
-        local spell = spells["penetrating_shot"]
-        if not spell or not spell.logics then break end
-        if spell.menu_elements and not spell.menu_elements.main_boolean:get() then break end
-        -- Only check if spell is off cooldown and ready
-        if not utility.is_spell_ready(377137) then break end
+    -- Meta build: Cast Penetrating Shot once per frame (simplified)
+    local spell = spells["penetrating_shot"]
+    if spell and spell.logics and utility.is_spell_ready(377137) and 
+       (not spell.menu_elements or spell.menu_elements.main_boolean:get()) then
         local result = spell.logics(target_list, target_selector_data_all, best_target)
-        if not result then break end
-        cast_end_time = current_time + 0.02  -- Ultra-fast casting for meta build damage output
-        if is_boss_fight then console.print("Penetrating Shot: Meta build primary damage spam") end
+        if result then
+            cast_end_time = current_time + 0.02  -- Ultra-fast casting for meta build damage output
+            if is_boss_fight then console.print("Penetrating Shot: Meta build primary damage spam") end
+        end
     end
 
     -- Auto-play movement logic with wall bounce optimization
@@ -1314,39 +1327,56 @@ safe_on_update(function()
         end
         
         if not is_dangerous then
-            -- Check for wall bounce positioning opportunities
-            local best_target = best_target or target_selector_data_all and target_selector_data_all.best_target
-            if best_target and best_target:is_enemy() then
-                local target_pos = best_target:get_position()
-                
-                -- Check if we're near walls for bounce optimization
-                local is_near_wall = false
-                for i = 1, 4 do
-                    local angle = (i - 1) * (math.pi / 2)
-                    local test_direction = vec3.new(math.cos(angle), math.sin(angle), 0)
-                    local test_position = player_position:add(test_direction:multiply(20.0))
+                            -- Check for wall bounce positioning opportunities
+                local best_target = best_target or target_selector_data_all and target_selector_data_all.best_target
+                if best_target and best_target:is_enemy() then
+                    local target_pos = best_target:get_position()
                     
-                    if prediction.is_wall_collision(player_position, test_position, 0.15) then
-                        is_near_wall = true
-                        break
+                    -- Check if we're near walls for bounce optimization
+                    local is_near_wall = false
+                    local closest_wall_distance = 999999
+                    local closest_wall_direction = nil
+                    
+                    for i = 1, 4 do
+                        local angle = (i - 1) * (math.pi / 2)
+                        local test_direction = vec3.new(math.cos(angle), math.sin(angle), 0)
+                        local test_position = player_position:add(test_direction:multiply(20.0))
+                        
+                        if prediction.is_wall_collision(player_position, test_position, 0.15) then
+                            local wall_distance = player_position:dist_to(test_position)
+                            if wall_distance < closest_wall_distance then
+                                closest_wall_distance = wall_distance
+                                closest_wall_direction = test_direction
+                                is_near_wall = true
+                            end
+                        end
                     end
-                end
-                
-                -- If near walls, try to position behind enemy for optimal bounce
-                if is_near_wall then
-                    local enemy_to_player = player_position:subtract(target_pos):normalize()
-                    local behind_enemy_pos = target_pos:add(enemy_to_player:multiply(6.0))
                     
-                    -- Check if we can move to this position
-                    if not prediction.is_wall_collision(player_position, behind_enemy_pos, 0.15) then
-                        if safe_pathfinder_move_to_cpathfinder(behind_enemy_pos) then
-                            can_move = current_time + 2.0
-                            if is_boss_fight then console.print("Movement: Positioning behind enemy for wall bounce optimization") end
-                            return
+                    -- If near walls, try to position behind enemy for optimal bounce
+                    if is_near_wall and closest_wall_direction then
+                        -- Position behind enemy, but also consider the closest wall direction
+                        local enemy_to_player = player_position:subtract(target_pos):normalize()
+                        local behind_enemy_pos = target_pos:add(enemy_to_player:multiply(6.0))
+                        
+                        -- Also try positioning that aligns with the closest wall
+                        local wall_aligned_pos = target_pos:add(closest_wall_direction:multiply(4.0))
+                        
+                        -- Choose the better position (behind enemy or wall-aligned)
+                        local optimal_pos = behind_enemy_pos
+                        if player_position:dist_to(wall_aligned_pos) < player_position:dist_to(behind_enemy_pos) then
+                            optimal_pos = wall_aligned_pos
+                        end
+                        
+                        -- Check if we can move to this position
+                        if not prediction.is_wall_collision(player_position, optimal_pos, 0.15) then
+                            if safe_pathfinder_move_to_cpathfinder(optimal_pos) then
+                                can_move = current_time + 2.0
+                                if is_boss_fight then console.print("Movement: Positioning for closest wall bounce optimization (wall distance: " .. string.format("%.1f", closest_wall_distance) .. "m)") end
+                                return
+                            end
                         end
                     end
                 end
-            end
             
             -- Standard movement logic (fallback)
             local closer_target = safe_target_selector_get_target_closer(player_position, 15.0)

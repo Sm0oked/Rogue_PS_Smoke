@@ -51,6 +51,7 @@ local menu_elements =
     enhanced_evade = checkbox:new(true, get_hash((my_utility and my_utility.plugin_label or "death_trap_rogue_") .. "enhanced_evade")),
     auto_resource_management = checkbox:new(true, get_hash((my_utility and my_utility.plugin_label or "death_trap_rogue_") .. "auto_resource_management")),
     auto_buff_management = checkbox:new(true, get_hash((my_utility and my_utility.plugin_label or "death_trap_rogue_") .. "auto_buff_management")),
+    boss_buff_management = checkbox:new(true, get_hash((my_utility and my_utility.plugin_label or "death_trap_rogue_") .. "boss_buff_management")),
     position_optimization = checkbox:new(false, get_hash((my_utility and my_utility.plugin_label or "death_trap_rogue_") .. "position_optimization")),
     enhanced_debug_viz = checkbox:new(false, get_hash((my_utility and my_utility.plugin_label or "death_trap_rogue_") .. "enhanced_debug_viz")),
     
@@ -73,6 +74,7 @@ local enhanced_targeting_description = "Enable enhanced targeting system"
 local enhanced_evade_description = "Enable enhanced evade system with dash and shadow step integration"
 local auto_resource_description = "Automatically manage resources for optimal spell usage"
 local auto_buff_description = "Automatically maintain important buffs"
+local boss_buff_description = "Automatically cast poison trap, caltrops, and smoke grenade for buff effects in boss/elite encounters"
 local position_optimization_description = "Automatically optimize positioning during combat"
 local enhanced_debug_description = "Enable enhanced visual debugging"
 
@@ -85,6 +87,7 @@ return {
     enhanced_evade_description = enhanced_evade_description,
     auto_resource_description = auto_resource_description,
     auto_buff_description = auto_buff_description,
+    boss_buff_description = boss_buff_description,
     position_optimization_description = position_optimization_description,
     enhanced_debug_description = enhanced_debug_description
 }

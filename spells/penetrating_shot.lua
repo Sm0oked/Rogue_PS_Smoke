@@ -80,6 +80,7 @@ local global_penetration_shot_last_cast_position = nil;
 local function find_optimal_wall_bounce_position(player_position, target_position, spell_range)
     local optimal_cast_position = target_position
     local max_hits = 0
+    local closest_wall_distance = 999999
     
     -- Check 8 directions around the target for wall bounce opportunities
     for i = 1, 8 do
@@ -97,6 +98,9 @@ local function find_optimal_wall_bounce_position(player_position, target_positio
             local wall_collision = prediction.is_wall_collision(player_position, test_position, 0.15)
             
             if wall_collision then
+                -- Calculate distance to this wall
+                local wall_distance = player_position:dist_to(test_position)
+                
                 -- Calculate potential hits from ricochet
                 local ricochet_hits = 0
                 
@@ -122,16 +126,29 @@ local function find_optimal_wall_bounce_position(player_position, target_positio
                     end
                 end
                 
-                -- Update optimal position if this gives more hits
-                if ricochet_hits > max_hits then
+                -- Prioritize closest wall with good hit count, or better hit count if similar distance
+                local should_update = false
+                if wall_distance < closest_wall_distance - 2.0 then
+                    -- Much closer wall, prefer it even with fewer hits
+                    should_update = true
+                elseif wall_distance <= closest_wall_distance + 2.0 and ricochet_hits > max_hits then
+                    -- Similar distance but more hits
+                    should_update = true
+                elseif ricochet_hits > max_hits + 2 then
+                    -- Significantly more hits, prefer it
+                    should_update = true
+                end
+                
+                if should_update then
                     max_hits = ricochet_hits
                     optimal_cast_position = test_position
+                    closest_wall_distance = wall_distance
                 end
             end
         end
     end
     
-    return optimal_cast_position, max_hits
+    return optimal_cast_position, max_hits, closest_wall_distance
 end
 
 -- Find optimal player position for wall bounce setup
@@ -300,7 +317,7 @@ local function logics(entity_list, target_selector_data, best_target)
         
         -- If near walls, optimize for bounce effects
         if is_near_wall then
-            local optimal_bounce_pos, optimal_bounce_hits = find_optimal_wall_bounce_position(player_position, target_pos, spell_range)
+            local optimal_bounce_pos, optimal_bounce_hits, wall_distance = find_optimal_wall_bounce_position(player_position, target_pos, spell_range)
             local min_bounce_hits = menu_elements.wall_bounce_min_hits:get()
             
             if optimal_bounce_hits >= min_bounce_hits then -- Only use bounce if it meets minimum hit requirement
@@ -319,7 +336,7 @@ local function logics(entity_list, target_selector_data, best_target)
                     end
                 end
                 
-                console.print("Penetrating shot: Wall bounce optimization - " .. bounce_hits .. " potential ricochet hits")
+                console.print("Penetrating shot: Wall bounce optimization - " .. bounce_hits .. " potential ricochet hits (wall distance: " .. string.format("%.1f", wall_distance) .. "m)")
             end
         end
     end
@@ -328,7 +345,8 @@ local function logics(entity_list, target_selector_data, best_target)
     if is_boss_fight then
         if is_near_wall and bounce_hits > 1 then
             cast_position = wall_bounce_position
-            console.print("Penetrating shot: Using wall bounce position for boss fight - " .. bounce_hits .. " hits")
+            local wall_distance = player_position:dist_to(wall_bounce_position)
+            console.print("Penetrating shot: Using wall bounce position for boss fight - " .. bounce_hits .. " hits (wall distance: " .. string.format("%.1f", wall_distance) .. "m)")
         else
             -- Fallback to standard boss positioning
             local direction = nil
@@ -401,7 +419,7 @@ local function logics(entity_list, target_selector_data, best_target)
     
     if cast_success then
         local current_time = get_time_since_inject()
-        next_time_allowed_cast = current_time + 0.02  -- Ultra-fast casting like boss mode
+        next_time_allowed_cast = current_time + 0.01  -- Even faster casting for aggressive mode
         global_penetration_shot_last_cast_position = cast_position
         _G.last_penetrating_shot_time = current_time
         
