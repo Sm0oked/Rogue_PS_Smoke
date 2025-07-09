@@ -981,13 +981,13 @@ safe_on_update(function()
     
     -- Boss Mode: Skip normal rotation and spam all spells aggressively
     if boss_mode_enabled then
-        -- Cast penetrating shot once per frame (simplified)
+        -- Cast penetrating shot as rapidly as possible (hold button behavior)
         local spell = spells["penetrating_shot"]
         if spell and spell.logics and utility.is_spell_ready(377137) and 
            (not spell.menu_elements or spell.menu_elements.main_boolean:get()) then
             local result = spell.logics(target_list, target_selector_data_all, best_target)
             if result then
-                cast_end_time = current_time + 0.05 -- Faster casting in boss mode
+                cast_end_time = current_time + 0.01 -- Minimal delay for rapid casting
             end
         end
         
@@ -1077,21 +1077,17 @@ safe_on_update(function()
         end
     end
     
-    -- Cast penetrating shot once per frame (simplified)
+    -- Cast penetrating shot as rapidly as possible (hold button behavior)
     local spell = spells["penetrating_shot"]
     if spell and spell.logics and utility.is_spell_ready(377137) and 
        (not spell.menu_elements or spell.menu_elements.main_boolean:get()) then
-        -- Add a longer delay to prevent too frequent calls and reduce debug spam
-        local last_penetrating_shot_attempt = _G.last_penetrating_shot_attempt or 0
-        if current_time - last_penetrating_shot_attempt >= 0.2 then -- 200ms delay between attempts to reduce spam
-            _G.last_penetrating_shot_attempt = current_time
-            local result = spell.logics(target_list, target_selector_data_all, best_target)
-            if result then
-                cast_end_time = current_time + 0.02 -- Fast casting like boss mode
-                return -- Exit after casting penetrating shot to prioritize it
-            elseif is_boss_fight then
-                console.print("Penetrating shot failed to cast in boss fight")
-            end
+        -- Cast every frame for maximum speed (hold button behavior)
+        local result = spell.logics(target_list, target_selector_data_all, best_target)
+        if result then
+            cast_end_time = current_time + 0.01 -- Minimal delay for rapid casting
+            return -- Exit after casting penetrating shot to prioritize it
+        elseif is_boss_fight then
+            console.print("Penetrating shot failed to cast in boss fight")
         end
     end
     
@@ -1307,13 +1303,13 @@ safe_on_update(function()
         ::continue::
     end
 
-    -- Meta build: Cast Penetrating Shot once per frame (simplified)
+    -- Meta build: Cast Penetrating Shot as rapidly as possible (hold button behavior)
     local spell = spells["penetrating_shot"]
     if spell and spell.logics and utility.is_spell_ready(377137) and 
        (not spell.menu_elements or spell.menu_elements.main_boolean:get()) then
         local result = spell.logics(target_list, target_selector_data_all, best_target)
         if result then
-            cast_end_time = current_time + 0.02  -- Ultra-fast casting for meta build damage output
+            cast_end_time = current_time + 0.001  -- Ultra-fast casting for hold button behavior
             if is_boss_fight then console.print("Penetrating Shot: Meta build primary damage spam") end
         end
     end

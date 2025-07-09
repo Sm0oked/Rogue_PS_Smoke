@@ -505,7 +505,7 @@ local function logics(entity_list, target_selector_data, best_target)
     
     if cast_success then
         local current_time = get_time_since_inject()
-        next_time_allowed_cast = current_time + 0.01  -- Even faster casting for aggressive mode
+        next_time_allowed_cast = current_time + 0.001  -- Ultra-fast casting for hold button behavior
         global_penetration_shot_last_cast_position = cast_position
         _G.last_penetrating_shot_time = current_time
         
