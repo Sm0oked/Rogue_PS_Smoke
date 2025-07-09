@@ -1081,9 +1081,9 @@ safe_on_update(function()
     local spell = spells["penetrating_shot"]
     if spell and spell.logics and utility.is_spell_ready(377137) and 
        (not spell.menu_elements or spell.menu_elements.main_boolean:get()) then
-        -- Add a small delay to prevent too frequent calls
+        -- Add a longer delay to prevent too frequent calls and reduce debug spam
         local last_penetrating_shot_attempt = _G.last_penetrating_shot_attempt or 0
-        if current_time - last_penetrating_shot_attempt >= 0.05 then -- 50ms delay between attempts
+        if current_time - last_penetrating_shot_attempt >= 0.2 then -- 200ms delay between attempts to reduce spam
             _G.last_penetrating_shot_attempt = current_time
             local result = spell.logics(target_list, target_selector_data_all, best_target)
             if result then

@@ -199,7 +199,13 @@ local function logics(entity_list, target_selector_data, best_target)
                 spell_id_penetration_shot);
 
     if not is_logic_allowed then
-        console.print("Penetrating shot: Logic not allowed")
+        -- Only print debug message occasionally to reduce spam
+        local last_debug_time = _G.last_penetrating_shot_debug_time or 0
+        local current_time = get_time_since_inject()
+        if current_time - last_debug_time > 2.0 then -- Only print every 2 seconds
+            console.print("Penetrating shot: Logic not allowed")
+            _G.last_penetrating_shot_debug_time = current_time
+        end
         return false;
     end;
 
@@ -246,8 +252,12 @@ local function logics(entity_list, target_selector_data, best_target)
     
     -- Allow casting if there's at least 1 enemy (simplified logic)
     if all_units_count < 1 then
-        if is_boss_fight then
+        -- Only print debug message occasionally to reduce spam
+        local last_no_enemies_debug_time = _G.last_penetrating_shot_no_enemies_debug_time or 0
+        local current_time = get_time_since_inject()
+        if current_time - last_no_enemies_debug_time > 3.0 then -- Only print every 3 seconds
             console.print("Penetrating shot: No enemies in range (count: " .. all_units_count .. ")")
+            _G.last_penetrating_shot_no_enemies_debug_time = current_time
         end
         return false
     end
@@ -273,8 +283,12 @@ local function logics(entity_list, target_selector_data, best_target)
     end
     
     if not target_to_cast_at or not target_to_cast_at:is_enemy() then
-        if is_boss_fight then
+        -- Only print debug message occasionally to reduce spam
+        local last_no_target_debug_time = _G.last_penetrating_shot_no_target_debug_time or 0
+        local current_time = get_time_since_inject()
+        if current_time - last_no_target_debug_time > 3.0 then -- Only print every 3 seconds
             console.print("Penetrating shot: No valid target found")
+            _G.last_penetrating_shot_no_target_debug_time = current_time
         end
         return false
     end
@@ -286,7 +300,13 @@ local function logics(entity_list, target_selector_data, best_target)
     end)
     
     if not target_success or not target_pos then
-        console.print("Penetrating shot: Failed to get target position")
+        -- Only print debug message occasionally to reduce spam
+        local last_target_pos_debug_time = _G.last_penetrating_shot_target_pos_debug_time or 0
+        local current_time = get_time_since_inject()
+        if current_time - last_target_pos_debug_time > 3.0 then -- Only print every 3 seconds
+            console.print("Penetrating shot: Failed to get target position")
+            _G.last_penetrating_shot_target_pos_debug_time = current_time
+        end
         return false
     end
     
@@ -330,13 +350,25 @@ local function logics(entity_list, target_selector_data, best_target)
                     
                     if player_bounce_hits > bounce_hits then
                         -- Suggest movement to optimal position (this would be handled by movement system)
-                        console.print("Penetrating shot: Optimal bounce position found - " .. player_bounce_hits .. " potential hits")
+                        -- Only print debug message occasionally to reduce spam
+                        local last_bounce_pos_debug_time = _G.last_penetrating_shot_bounce_pos_debug_time or 0
+                        local current_time = get_time_since_inject()
+                        if current_time - last_bounce_pos_debug_time > 5.0 then -- Only print every 5 seconds
+                            console.print("Penetrating shot: Optimal bounce position found - " .. player_bounce_hits .. " potential hits")
+                            _G.last_penetrating_shot_bounce_pos_debug_time = current_time
+                        end
                         wall_bounce_position = optimal_bounce_pos
                         bounce_hits = player_bounce_hits
                     end
                 end
                 
-                console.print("Penetrating shot: Wall bounce optimization - " .. bounce_hits .. " potential ricochet hits (wall distance: " .. string.format("%.1f", wall_distance) .. "m)")
+                -- Only print debug message occasionally to reduce spam
+                local last_wall_bounce_debug_time = _G.last_penetrating_shot_wall_bounce_debug_time or 0
+                local current_time = get_time_since_inject()
+                if current_time - last_wall_bounce_debug_time > 5.0 then -- Only print every 5 seconds
+                    console.print("Penetrating shot: Wall bounce optimization - " .. bounce_hits .. " potential ricochet hits (wall distance: " .. string.format("%.1f", wall_distance) .. "m)")
+                    _G.last_penetrating_shot_wall_bounce_debug_time = current_time
+                end
             end
         end
     end
@@ -346,7 +378,13 @@ local function logics(entity_list, target_selector_data, best_target)
         if is_near_wall and bounce_hits > 1 then
             cast_position = wall_bounce_position
             local wall_distance = player_position:dist_to(wall_bounce_position)
-            console.print("Penetrating shot: Using wall bounce position for boss fight - " .. bounce_hits .. " hits (wall distance: " .. string.format("%.1f", wall_distance) .. "m)")
+            -- Only print debug message occasionally to reduce spam
+            local last_boss_bounce_debug_time = _G.last_penetrating_shot_boss_bounce_debug_time or 0
+            local current_time = get_time_since_inject()
+            if current_time - last_boss_bounce_debug_time > 3.0 then -- Only print every 3 seconds
+                console.print("Penetrating shot: Using wall bounce position for boss fight - " .. bounce_hits .. " hits (wall distance: " .. string.format("%.1f", wall_distance) .. "m)")
+                _G.last_penetrating_shot_boss_bounce_debug_time = current_time
+            end
         else
             -- Fallback to standard boss positioning
             local direction = nil
@@ -369,18 +407,42 @@ local function logics(entity_list, target_selector_data, best_target)
                     
                     if offset_success and offset_pos then
                         cast_position = offset_pos
-                        console.print("Penetrating shot: Using offset position for boss fight")
+                        -- Only print debug message occasionally to reduce spam
+                        local last_boss_offset_debug_time = _G.last_penetrating_shot_boss_offset_debug_time or 0
+                        local current_time = get_time_since_inject()
+                        if current_time - last_boss_offset_debug_time > 3.0 then -- Only print every 3 seconds
+                            console.print("Penetrating shot: Using offset position for boss fight")
+                            _G.last_penetrating_shot_boss_offset_debug_time = current_time
+                        end
                     else
                         cast_position = target_pos
-                        console.print("Penetrating shot: Offset calculation failed, using direct boss position")
+                        -- Only print debug message occasionally to reduce spam
+                        local last_boss_fallback_debug_time = _G.last_penetrating_shot_boss_fallback_debug_time or 0
+                        local current_time = get_time_since_inject()
+                        if current_time - last_boss_fallback_debug_time > 3.0 then -- Only print every 3 seconds
+                            console.print("Penetrating shot: Offset calculation failed, using direct boss position")
+                            _G.last_penetrating_shot_boss_fallback_debug_time = current_time
+                        end
                     end
                 else
                     cast_position = target_pos
-                    console.print("Penetrating shot: Direction normalization failed, using direct boss position")
+                    -- Only print debug message occasionally to reduce spam
+                    local last_boss_norm_debug_time = _G.last_penetrating_shot_boss_norm_debug_time or 0
+                    local current_time = get_time_since_inject()
+                    if current_time - last_boss_norm_debug_time > 3.0 then -- Only print every 3 seconds
+                        console.print("Penetrating shot: Direction normalization failed, using direct boss position")
+                        _G.last_penetrating_shot_boss_norm_debug_time = current_time
+                    end
                 end
             else
                 cast_position = target_pos
-                console.print("Penetrating shot: Direction calculation failed, using direct boss position")
+                -- Only print debug message occasionally to reduce spam
+                local last_boss_dir_debug_time = _G.last_penetrating_shot_boss_dir_debug_time or 0
+                local current_time = get_time_since_inject()
+                if current_time - last_boss_dir_debug_time > 3.0 then -- Only print every 3 seconds
+                    console.print("Penetrating shot: Direction calculation failed, using direct boss position")
+                    _G.last_penetrating_shot_boss_dir_debug_time = current_time
+                end
             end
         end
     else
@@ -398,16 +460,40 @@ local function logics(entity_list, target_selector_data, best_target)
         is_wall_collision = prediction.is_wall_collision(player_position, cast_position, 0.15)
         if is_wall_collision and not (is_near_wall and menu_elements.enable_wall_bounce:get()) then
             -- Only block if we're not intentionally using wall bounce
-            console.print("Penetrating shot: Unintentional wall collision detected")
+            -- Only print debug message occasionally to reduce spam
+            local last_wall_collision_debug_time = _G.last_penetrating_shot_wall_collision_debug_time or 0
+            local current_time = get_time_since_inject()
+            if current_time - last_wall_collision_debug_time > 3.0 then -- Only print every 3 seconds
+                console.print("Penetrating shot: Unintentional wall collision detected")
+                _G.last_penetrating_shot_wall_collision_debug_time = current_time
+            end
             return false
         elseif is_wall_collision and is_near_wall and menu_elements.enable_wall_bounce:get() then
-            console.print("Penetrating shot: Intentional wall bounce for Eaglehorn ricochet effect")
+            -- Only print debug message occasionally to reduce spam
+            local last_intentional_bounce_debug_time = _G.last_penetrating_shot_intentional_bounce_debug_time or 0
+            local current_time = get_time_since_inject()
+            if current_time - last_intentional_bounce_debug_time > 5.0 then -- Only print every 5 seconds
+                console.print("Penetrating shot: Intentional wall bounce for Eaglehorn ricochet effect")
+                _G.last_penetrating_shot_intentional_bounce_debug_time = current_time
+            end
         end
     else
         if is_near_wall and menu_elements.enable_wall_bounce:get() then
-            console.print("Penetrating shot: Using wall bounce in boss fight for Eaglehorn ricochet")
+            -- Only print debug message occasionally to reduce spam
+            local last_boss_bounce_use_debug_time = _G.last_penetrating_shot_boss_bounce_use_debug_time or 0
+            local current_time = get_time_since_inject()
+            if current_time - last_boss_bounce_use_debug_time > 5.0 then -- Only print every 5 seconds
+                console.print("Penetrating shot: Using wall bounce in boss fight for Eaglehorn ricochet")
+                _G.last_penetrating_shot_boss_bounce_use_debug_time = current_time
+            end
         else
-            console.print("Penetrating shot: Standard boss fight positioning")
+            -- Only print debug message occasionally to reduce spam
+            local last_boss_standard_debug_time = _G.last_penetrating_shot_boss_standard_debug_time or 0
+            local current_time = get_time_since_inject()
+            if current_time - last_boss_standard_debug_time > 5.0 then -- Only print every 5 seconds
+                console.print("Penetrating shot: Standard boss fight positioning")
+                _G.last_penetrating_shot_boss_standard_debug_time = current_time
+            end
         end
     end
 
@@ -423,16 +509,28 @@ local function logics(entity_list, target_selector_data, best_target)
         global_penetration_shot_last_cast_position = cast_position
         _G.last_penetrating_shot_time = current_time
         
-        if is_boss_fight then
-            console.print("Penetrating shot: Cast successful in boss fight")
-        else
-            console.print("Rouge Plugin: Casted Penetrating Shot (fast mode)")
+        -- Only print debug message occasionally to reduce spam
+        local last_cast_success_debug_time = _G.last_penetrating_shot_cast_success_debug_time or 0
+        local current_time = get_time_since_inject()
+        if current_time - last_cast_success_debug_time > 2.0 then -- Only print every 2 seconds
+            if is_boss_fight then
+                console.print("Penetrating shot: Cast successful in boss fight")
+            else
+                console.print("Rouge Plugin: Casted Penetrating Shot (fast mode)")
+            end
+            _G.last_penetrating_shot_cast_success_debug_time = current_time
         end
         return true
     end
     
-    if is_boss_fight then
-        console.print("Penetrating shot: Cast failed in boss fight")
+    -- Only print debug message occasionally to reduce spam
+    local last_cast_fail_debug_time = _G.last_penetrating_shot_cast_fail_debug_time or 0
+    local current_time = get_time_since_inject()
+    if current_time - last_cast_fail_debug_time > 3.0 then -- Only print every 3 seconds
+        if is_boss_fight then
+            console.print("Penetrating shot: Cast failed in boss fight")
+        end
+        _G.last_penetrating_shot_cast_fail_debug_time = current_time
     end
     return false;
 end
