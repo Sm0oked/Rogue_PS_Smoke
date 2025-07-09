@@ -1,6 +1,6 @@
 # Rogue-DeathTrap Smoke Enhanced
 
-## Current Spell Rotation (Updated 2025-07-8)
+## Current Spell Rotation (Updated 2025-01-27)
 
 The script now uses a sophisticated spell priority system with the following order:
 

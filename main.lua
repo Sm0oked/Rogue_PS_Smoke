@@ -366,6 +366,7 @@ safe_on_render_menu(function()
     local options = {"Melee", "Ranged"}
     menu.menu_elements.mode:render("Mode", options, "")
     menu.menu_elements.evade_cooldown:render("Evade Cooldown", "")
+    menu.menu_elements.boss_mode:render("Boss Mode", menu.boss_mode_description)
 
     if menu.menu_elements.settings_tree:push("Settings") then
         menu.menu_elements.enemy_count_threshold:render("Minimum Enemy Count",
@@ -916,7 +917,11 @@ safe_on_update(function()
     end
 
     if is_auto_play_active then
-        max_range = 12.0
+        if is_ranged then
+            max_range = 20.0  -- Increased range for ranged mode in auto-play
+        else
+            max_range = 12.0  -- Keep existing range for melee mode in auto-play
+        end
     end
 
     -- Determine primary target based on configuration and context
@@ -956,9 +961,193 @@ safe_on_update(function()
         end
     end
 
-    -- Main spell rotation with prioritization
-    -- Iterate through spell priority list for better organized rotation
+    -- Check if boss mode is enabled
+    local boss_mode_enabled = safe_get_menu_element(menu.menu_elements.boss_mode, false)
+    
+    -- Boss Mode: Skip normal rotation and spam all spells aggressively
+    if boss_mode_enabled then
+        -- Spam penetrating shot aggressively
+        while true do
+            local spell = spells["penetrating_shot"]
+            if not spell or not spell.logics then break end
+            if spell.menu_elements and not spell.menu_elements.main_boolean:get() then break end
+            -- Only check if spell is off cooldown and ready
+            if not utility.is_spell_ready(377137) then break end
+            local result = spell.logics(target_list, target_selector_data_all, best_target)
+            if not result then break end
+            cast_end_time = current_time + 0.05 -- Faster casting in boss mode
+        end
+        
+        -- Boss Mode: Prioritize area control spells (smoke grenade, poison trap, caltrops)
+        local boss_area_spells = {"smoke_grenade", "poison_trap", "caltrop"}
+        for _, spell_name in ipairs(boss_area_spells) do
+            local spell = spells[spell_name]
+            if not spell or not spell.logics then goto continue_boss_area end
+            if spell.menu_elements and not spell.menu_elements.main_boolean:get() then goto continue_boss_area end
+            
+            -- Check if spell is ready and affordable
+            local spell_id = nil
+            if spell_name == "poison_trap" then spell_id = 416528
+            elseif spell_name == "smoke_grenade" then spell_id = 356162
+            elseif spell_name == "caltrop" then spell_id = 389667
+            end
+            
+            if spell_id and utility.is_spell_ready(spell_id) and utility.is_spell_affordable(spell_id) then
+                local result = spell.logics(target_list, target_selector_data_all, best_target)
+                if result then
+                    cast_end_time = current_time + 0.05 -- Faster casting in boss mode
+                    console.print("Boss mode: Cast " .. spell_name .. " successfully")
+                    break -- Cast one area spell per frame
+                end
+            end
+            ::continue_boss_area::
+        end
+        
+        -- Spam all other damage spells off cooldown
+        for _, spell_name in ipairs(spell_priority) do
+            if spell_name ~= "penetrating_shot" and spell_name ~= "smoke_grenade" and spell_name ~= "poison_trap" and spell_name ~= "caltrop" then
+                local spell = spells[spell_name]
+                if not spell or not spell.logics then goto continue_boss end
+                if spell.menu_elements and not spell.menu_elements.main_boolean:get() then goto continue_boss end
+                
+                -- Check if spell is ready and affordable
+                local spell_id = nil
+                if spell_name == "shadow_clone" then spell_id = 357628
+                elseif spell_name == "shadow_imbuement" then spell_id = 380288
+                elseif spell_name == "dash" then spell_id = 358761
+                elseif spell_name == "shadow_step" then spell_id = 355606
+                elseif spell_name == "dark_shroud" then spell_id = 786381
+                end
+                
+                if spell_id and utility.is_spell_ready(spell_id) and utility.is_spell_affordable(spell_id) then
+                    local result = false
+                    
+                    -- Cast based on spell type
+                    if spell_name == "shadow_clone" then
+                        result = spell.logics()
+                    elseif spell_name == "shadow_imbuement" or spell_name == "dark_shroud" then
+                        result = spell.logics()
+                    elseif spell_name == "dash" or spell_name == "shadow_step" then
+                        result = spell.logics(best_target)
+                    else
+                        result = spell.logics(best_target)
+                    end
+                    
+                    if result then
+                        cast_end_time = current_time + 0.05 -- Faster casting in boss mode
+                        console.print("Boss mode: Cast " .. spell_name .. " successfully")
+                        break -- Only cast one spell per frame in boss mode
+                    end
+                end
+            end
+            ::continue_boss::
+        end
+        return -- Exit early in boss mode
+    end
+    
+    -- Normal Mode: Main spell rotation with prioritization
+    -- Check if we're fighting a boss (like Belial) and enable aggressive mode
+    local is_boss_fight = false
+    if best_target and (best_target:is_boss() or best_target:is_champion()) then
+        is_boss_fight = true
+        console.print("Boss fight detected - enabling aggressive mode")
+    end
+    
+    -- Spam penetrating shot aggressively first (like boss mode)
+    while true do
+        local spell = spells["penetrating_shot"]
+        if not spell or not spell.logics then break end
+        if spell.menu_elements and not spell.menu_elements.main_boolean:get() then break end
+        -- Only check if spell is off cooldown and ready
+        if not utility.is_spell_ready(377137) then break end
+        local result = spell.logics(target_list, target_selector_data_all, best_target)
+        if not result then 
+            if is_boss_fight then
+                console.print("Penetrating shot failed to cast in boss fight")
+            end
+            break 
+        end
+        cast_end_time = current_time + 0.02 -- Fast casting like boss mode
+        return -- Exit after casting penetrating shot to prioritize it
+    end
+    
+    -- Check if spells were cast recently to prevent over-prioritization over penetrating shot
+    -- Reduce cooldowns in boss fights for more aggressive casting
+    local cooldown_multiplier = is_boss_fight and 0.3 or 1.0 -- 70% reduction in boss fights for area spells
+    
+    local caltrop_cooldown = 3.0 * cooldown_multiplier -- 3 second cooldown for caltrop to prevent spam
+    local smoke_grenade_cooldown = 4.0 * cooldown_multiplier -- 4 second cooldown for smoke grenade to prevent spam
+    local poison_trap_cooldown = 4.0 * cooldown_multiplier -- 4 second cooldown for poison trap to prevent spam
+    local shadow_imbuement_cooldown = 8.0 * cooldown_multiplier -- 8 second cooldown for shadow imbuement to prevent spam
+    local shadow_clone_cooldown = 5.0 * cooldown_multiplier -- 5 second cooldown for shadow clone to prevent spam
+    local dash_cooldown = 3.0 * cooldown_multiplier -- 3 second cooldown for dash to prevent spam
+    local shadow_step_cooldown = 4.0 * cooldown_multiplier -- 4 second cooldown for shadow step to prevent spam
+    local dark_shroud_cooldown = 6.0 * cooldown_multiplier -- 6 second cooldown for dark shroud to prevent spam
+    
+    local last_caltrop_time = _G.last_caltrop_time or 0
+    local last_smoke_grenade_time = _G.last_smoke_grenade_time or 0
+    local last_poison_trap_time = _G.last_poison_trap_time or 0
+    local last_shadow_imbuement_time = _G.last_shadow_imbuement_time or 0
+    local last_shadow_clone_time = _G.last_shadow_clone_time or 0
+    local last_dash_time = _G.last_dash_time or 0
+    local last_shadow_step_time = _G.last_shadow_step_time or 0
+    local last_dark_shroud_time = _G.last_dark_shroud_time or 0
+    
+    local caltrop_ready = (current_time - last_caltrop_time) >= caltrop_cooldown
+    local smoke_grenade_ready = (current_time - last_smoke_grenade_time) >= smoke_grenade_cooldown
+    local poison_trap_ready = (current_time - last_poison_trap_time) >= poison_trap_cooldown
+    local shadow_imbuement_ready = (current_time - last_shadow_imbuement_time) >= shadow_imbuement_cooldown
+    local shadow_clone_ready = (current_time - last_shadow_clone_time) >= shadow_clone_cooldown
+    local dash_ready = (current_time - last_dash_time) >= dash_cooldown
+    local shadow_step_ready = (current_time - last_shadow_step_time) >= shadow_step_cooldown
+    local dark_shroud_ready = (current_time - last_dark_shroud_time) >= dark_shroud_cooldown
+    
+    -- In boss fights, prioritize area control spells first
+    if is_boss_fight then
+        local boss_area_spells = {"smoke_grenade", "poison_trap", "caltrop"}
+        for _, spell_name in ipairs(boss_area_spells) do
+            local spell = spells[spell_name]
+            if not spell or not spell.logics then goto continue_boss_area_normal end
+            if spell.menu_elements and not spell.menu_elements.main_boolean:get() then goto continue_boss_area_normal end
+            
+            -- Check cooldown for this specific spell
+            local spell_cooldown = 0
+            local last_cast_time = 0
+            if spell_name == "caltrop" then 
+                spell_cooldown = caltrop_cooldown
+                last_cast_time = last_caltrop_time
+            elseif spell_name == "smoke_grenade" then 
+                spell_cooldown = smoke_grenade_cooldown
+                last_cast_time = last_smoke_grenade_time
+            elseif spell_name == "poison_trap" then 
+                spell_cooldown = poison_trap_cooldown
+                last_cast_time = last_poison_trap_time
+            end
+            
+            local spell_ready = (current_time - last_cast_time) >= spell_cooldown
+            if not spell_ready then goto continue_boss_area_normal end
+            
+            local result = spell.logics(target_list, target_selector_data_all, best_target)
+            if result then
+                cast_end_time = current_time + 0.3
+                if spell_name == "caltrop" then
+                    _G.last_caltrop_time = current_time
+                elseif spell_name == "smoke_grenade" then
+                    _G.last_smoke_grenade_time = current_time
+                elseif spell_name == "poison_trap" then
+                    _G.last_poison_trap_time = current_time
+                end
+                console.print("Boss fight: Cast " .. spell_name .. " successfully")
+                return
+            end
+            ::continue_boss_area_normal::
+        end
+    end
+    
+    -- Iterate through spell priority list for other spells (excluding penetrating shot)
     for _, spell_name in ipairs(spell_priority) do
+        if spell_name == "penetrating_shot" then goto continue end -- Skip penetrating shot as it's handled above
+        
         local spell = spells[spell_name]
         if not spell or not spell.logics then
             goto continue
@@ -969,13 +1158,42 @@ safe_on_update(function()
             goto continue
         end
         
+        -- Special handling for all spells - only cast once per cooldown period to prioritize penetrating shot
+        if spell_name == "caltrop" and not caltrop_ready then
+            if is_boss_fight then console.print("Caltrop on cooldown: " .. (caltrop_cooldown - (current_time - last_caltrop_time)) .. "s remaining") end
+            goto continue
+        elseif spell_name == "smoke_grenade" and not smoke_grenade_ready then
+            if is_boss_fight then console.print("Smoke grenade on cooldown: " .. (smoke_grenade_cooldown - (current_time - last_smoke_grenade_time)) .. "s remaining") end
+            goto continue
+        elseif spell_name == "poison_trap" and not poison_trap_ready then
+            if is_boss_fight then console.print("Poison trap on cooldown: " .. (poison_trap_cooldown - (current_time - last_poison_trap_time)) .. "s remaining") end
+            goto continue
+        elseif spell_name == "shadow_imbuement" and not shadow_imbuement_ready then
+            if is_boss_fight then console.print("Shadow imbuement on cooldown: " .. (shadow_imbuement_cooldown - (current_time - last_shadow_imbuement_time)) .. "s remaining") end
+            goto continue
+        elseif spell_name == "shadow_clone" and not shadow_clone_ready then
+            if is_boss_fight then console.print("Shadow clone on cooldown: " .. (shadow_clone_cooldown - (current_time - last_shadow_clone_time)) .. "s remaining") end
+            goto continue
+        elseif spell_name == "dash" and not dash_ready then
+            if is_boss_fight then console.print("Dash on cooldown: " .. (dash_cooldown - (current_time - last_dash_time)) .. "s remaining") end
+            goto continue
+        elseif spell_name == "shadow_step" and not shadow_step_ready then
+            if is_boss_fight then console.print("Shadow step on cooldown: " .. (shadow_step_cooldown - (current_time - last_shadow_step_time)) .. "s remaining") end
+            goto continue
+        elseif spell_name == "dark_shroud" and not dark_shroud_ready then
+            if is_boss_fight then console.print("Dark shroud on cooldown: " .. (dark_shroud_cooldown - (current_time - last_dark_shroud_time)) .. "s remaining") end
+            goto continue
+        end
+        
         -- Different spell types have different parameter requirements
         local result = false
         
         if spell_name == "shadow_clone" then
             result = spell.logics()
             if result then
+                _G.last_shadow_clone_time = current_time -- Track shadow clone cast time
                 cast_end_time = current_time + 0.4
+                if is_boss_fight then console.print("Shadow clone cast successfully") end
                 return
             end
         elseif spell_name == "shadow_imbuement" or 
@@ -987,17 +1205,20 @@ safe_on_update(function()
             -- Self-cast spells
             result = spell.logics()
             if result then
-        cast_end_time = current_time + 0.3
+                cast_end_time = current_time + 0.3
                 if spell_name == "concealment" then
                     _G.last_concealment_time = current_time
                     cast_end_time = current_time + 0.6
+                elseif spell_name == "shadow_imbuement" then
+                    _G.last_shadow_imbuement_time = current_time -- Track shadow imbuement cast time
+                elseif spell_name == "dark_shroud" then
+                    _G.last_dark_shroud_time = current_time -- Track dark shroud cast time
                 end
         return
     end
         elseif spell_name == "death_trap" or
                spell_name == "poison_trap" or
                spell_name == "smoke_grenade" or
-               spell_name == "penetrating_shot" or
                spell_name == "rain_of_arrows" or
                spell_name == "caltrop" then
             -- Area spells that need target_list and data
@@ -1006,13 +1227,21 @@ safe_on_update(function()
                 cast_end_time = current_time + (spell_name == "death_trap" and 0.05 or 0.3)
                 if spell_name == "death_trap" then
                     _G.last_death_trap_time = current_time
+                elseif spell_name == "caltrop" then
+                    _G.last_caltrop_time = current_time -- Track caltrop cast time
+                elseif spell_name == "smoke_grenade" then
+                    _G.last_smoke_grenade_time = current_time -- Track smoke grenade cast time
+                elseif spell_name == "poison_trap" then
+                    _G.last_poison_trap_time = current_time -- Track poison trap cast time
                 end
+                if is_boss_fight then console.print(spell_name .. " cast successfully") end
         return
     end
         elseif spell_name == "shadow_step" then
             -- Special case for shadow step
             result = spell.logics(target_list, target_selector_data_all, best_target, closest_target)
             if result then
+                _G.last_shadow_step_time = current_time -- Track shadow step cast time
                 cast_end_time = current_time + 0.2
                 return
             end
@@ -1027,7 +1256,7 @@ safe_on_update(function()
             -- Special case for dash
             result = spell.logics(best_target)
             if result then
-                _G.last_dash_time = current_time
+                _G.last_dash_time = current_time -- Track dash cast time
                 cast_end_time = current_time + 0.2
                 return
             end
@@ -1063,7 +1292,7 @@ safe_on_update(function()
         ::continue::
     end
 
-    -- After the main rotation and all other logic, cast Penetrating Shot as aggressively as possible
+    -- Final penetrating shot spam after other spells (like boss mode)
     while true do
         local spell = spells["penetrating_shot"]
         if not spell or not spell.logics then break end
@@ -1072,7 +1301,7 @@ safe_on_update(function()
         if not utility.is_spell_ready(377137) then break end
         local result = spell.logics(target_list, target_selector_data_all, best_target)
         if not result then break end
-        cast_end_time = current_time + 0.1
+        cast_end_time = current_time + 0.05  -- Fast casting like boss mode
     end
 
     -- Auto-play movement logic
