@@ -5,6 +5,16 @@ local enhanced_debug = {}
 function enhanced_debug.enhanced_debug_visualization(debug_enabled)
     if not debug_enabled then return end
     
+    -- Performance optimization: Throttle enhanced debug rendering
+    local current_time = get_time_since_inject()
+    local last_enhanced_debug_time = _G.last_enhanced_debug_time or 0
+    local enhanced_debug_interval = 0.2 -- Render enhanced debug every 200ms
+    
+    if current_time - last_enhanced_debug_time < enhanced_debug_interval then
+        return
+    end
+    _G.last_enhanced_debug_time = current_time
+    
     local player_position = nil
     
     -- Safely get player position
@@ -98,7 +108,7 @@ function enhanced_debug.enhanced_debug_visualization(debug_enabled)
         )
     end)
     
-    -- Draw spell cooldowns for key spells
+    -- Draw spell cooldowns for key spells (limited to 4 spells for performance)
     pcall(function()
         local spell_ids = {
             {id = 421161, name = "Death Trap"},
@@ -119,30 +129,60 @@ end
 function enhanced_debug.draw_spell_areas(spell_ranges, debug_enabled)
     if not debug_enabled then return end
     
+    -- Performance optimization: Throttle spell areas rendering
+    local current_time = get_time_since_inject()
+    local last_spell_areas_time = _G.last_spell_areas_time or 0
+    local spell_areas_interval = 0.25 -- Render spell areas every 250ms
+    
+    if current_time - last_spell_areas_time < spell_areas_interval then
+        return
+    end
+    _G.last_spell_areas_time = current_time
+    
     local player_position = get_player_position()
     
+    -- Limit to first 6 spells for performance
+    local spell_count = 0
     for spell_name, range in pairs(spell_ranges) do
+        if spell_count >= 6 then break end -- Limit to 6 spells for performance
+        
         local radius = range.radius or 5.0
         local distance = range.range or 10.0
         local color = range.color or color_yellow(80)
         
-        -- Draw spell range
-        graphics.circle_3d(player_position, distance, color, 1)
+        -- Draw spell range with reduced segments for performance
+        graphics.circle_3d(player_position, distance, color, 1.0, 36) -- Reduced segments
         
         -- If there's a cast position, draw the effect area
         if range.last_cast_position then
-            graphics.circle_3d(range.last_cast_position, radius, color_green(80), 1)
+            graphics.circle_3d(range.last_cast_position, radius, color_green(80), 1.0, 24) -- Reduced segments
         end
+        
+        spell_count = spell_count + 1
     end
 end
 
 function enhanced_debug.draw_enemy_info(debug_enabled)
     if not debug_enabled then return end
     
+    -- Performance optimization: Throttle enemy info rendering
+    local current_time = get_time_since_inject()
+    local last_enemy_info_time = _G.last_enemy_info_time or 0
+    local enemy_info_interval = 0.3 -- Render enemy info every 300ms
+    
+    if current_time - last_enemy_info_time < enemy_info_interval then
+        return
+    end
+    _G.last_enemy_info_time = current_time
+    
     local player_position = get_player_position()
     local enemies = utility.get_units_inside_circle_list(player_position, 20.0)
     
+    -- Limit to first 8 enemies for performance
+    local enemy_count = 0
     for _, enemy in ipairs(enemies) do
+        if enemy_count >= 8 then break end -- Limit to 8 enemies for performance
+        
         local enemy_pos = enemy:get_position()
         local screen_pos = graphics.w2s(enemy_pos)
         local health_percent = enemy:get_health() / enemy:get_max_health()
@@ -173,6 +213,7 @@ function enhanced_debug.draw_enemy_info(debug_enabled)
         end
         
         graphics.text_2d(enemy_type, vec2.new(screen_pos:x() - 20, screen_pos:y() - 35), 12, text_color)
+        enemy_count = enemy_count + 1
     end
 end
 

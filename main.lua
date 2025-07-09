@@ -789,17 +789,26 @@ safe_on_update(function()
         end
     end
     
-    -- Process enhanced evade if enabled
+    -- Process enhanced evade if enabled (with throttling to reduce spam)
     if menu.menu_elements.enhanced_evade and safe_get_menu_element(menu.menu_elements.enhanced_evade, false) then
-        -- Wrap evade processing in pcall to prevent script errors
-        local evaded = false
-        local evade_success = pcall(function()
-            evaded = enhancements_manager.process_evade(menu.menu_elements)
-        end)
+        -- Throttle evade processing to reduce spam
+        local current_time = get_time_since_inject()
+        local last_evade_check = _G.last_evade_check or 0
+        local evade_check_interval = 0.5 -- Check evade every 0.5 seconds instead of every frame
         
-        if evade_success and evaded then
-            -- Successfully evaded, skip the rest of this frame
-            return
+        if current_time - last_evade_check >= evade_check_interval then
+            _G.last_evade_check = current_time
+            
+            -- Wrap evade processing in pcall to prevent script errors
+            local evaded = false
+            local evade_success = pcall(function()
+                evaded = enhancements_manager.process_evade(menu.menu_elements)
+            end)
+            
+            if evade_success and evaded then
+                -- Successfully evaded, skip the rest of this frame
+                return
+            end
         end
     end
     
@@ -1144,9 +1153,9 @@ safe_on_update(function()
         end
     end
     
-    -- Iterate through spell priority list for other spells (excluding penetrating shot)
+    -- Meta Build Spell Rotation Implementation
     for _, spell_name in ipairs(spell_priority) do
-        if spell_name == "penetrating_shot" then goto continue end -- Skip penetrating shot as it's handled above
+        if spell_name == "penetrating_shot" then goto continue end -- Skip penetrating shot as it's handled separately for aggressive spamming
         
         local spell = spells[spell_name]
         if not spell or not spell.logics then
@@ -1158,107 +1167,98 @@ safe_on_update(function()
             goto continue
         end
         
-        -- Special handling for all spells - only cast once per cooldown period to prioritize penetrating shot
+        -- Meta build timing: Shadow Clone every 5 seconds for damage doubling + Unstoppable
+        if spell_name == "shadow_clone" then
+            local last_shadow_clone_time = _G.last_shadow_clone_time or 0
+            if current_time - last_shadow_clone_time < 5.0 then -- Meta build timing: every 5 seconds
+                if is_boss_fight then console.print("Shadow Clone: Meta build timing (5s) - " .. (5.0 - (current_time - last_shadow_clone_time)) .. "s remaining") end
+                goto continue
+            end
+        end
+        
+        -- Meta build cooldown checks with improved messaging
         if spell_name == "caltrop" and not caltrop_ready then
-            if is_boss_fight then console.print("Caltrop on cooldown: " .. (caltrop_cooldown - (current_time - last_caltrop_time)) .. "s remaining") end
+            if is_boss_fight then console.print("Caltrops: Meta build damage multiplier on cooldown - " .. (caltrop_cooldown - (current_time - last_caltrop_time)) .. "s remaining") end
             goto continue
         elseif spell_name == "smoke_grenade" and not smoke_grenade_ready then
-            if is_boss_fight then console.print("Smoke grenade on cooldown: " .. (smoke_grenade_cooldown - (current_time - last_smoke_grenade_time)) .. "s remaining") end
+            if is_boss_fight then console.print("Smoke Grenade: Meta build elite/boss damage on cooldown - " .. (smoke_grenade_cooldown - (current_time - last_smoke_grenade_time)) .. "s remaining") end
             goto continue
         elseif spell_name == "poison_trap" and not poison_trap_ready then
-            if is_boss_fight then console.print("Poison trap on cooldown: " .. (poison_trap_cooldown - (current_time - last_poison_trap_time)) .. "s remaining") end
+            if is_boss_fight then console.print("Poison Trap: Meta build Pit Push variant on cooldown - " .. (poison_trap_cooldown - (current_time - last_poison_trap_time)) .. "s remaining") end
             goto continue
         elseif spell_name == "shadow_imbuement" and not shadow_imbuement_ready then
-            if is_boss_fight then console.print("Shadow imbuement on cooldown: " .. (shadow_imbuement_cooldown - (current_time - last_shadow_imbuement_time)) .. "s remaining") end
-            goto continue
-        elseif spell_name == "shadow_clone" and not shadow_clone_ready then
-            if is_boss_fight then console.print("Shadow clone on cooldown: " .. (shadow_clone_cooldown - (current_time - last_shadow_clone_time)) .. "s remaining") end
+            if is_boss_fight then console.print("Shadow Imbuement: Meta build damage multiplier on cooldown - " .. (shadow_imbuement_cooldown - (current_time - last_shadow_imbuement_time)) .. "s remaining") end
             goto continue
         elseif spell_name == "dash" and not dash_ready then
-            if is_boss_fight then console.print("Dash on cooldown: " .. (dash_cooldown - (current_time - last_dash_time)) .. "s remaining") end
+            if is_boss_fight then console.print("Dash: Meta build mobility on cooldown - " .. (dash_cooldown - (current_time - last_dash_time)) .. "s remaining") end
             goto continue
         elseif spell_name == "shadow_step" and not shadow_step_ready then
-            if is_boss_fight then console.print("Shadow step on cooldown: " .. (shadow_step_cooldown - (current_time - last_shadow_step_time)) .. "s remaining") end
-            goto continue
-        elseif spell_name == "dark_shroud" and not dark_shroud_ready then
-            if is_boss_fight then console.print("Dark shroud on cooldown: " .. (dark_shroud_cooldown - (current_time - last_dark_shroud_time)) .. "s remaining") end
+            if is_boss_fight then console.print("Shadow Step: Meta build mobility on cooldown - " .. (shadow_step_cooldown - (current_time - last_shadow_step_time)) .. "s remaining") end
             goto continue
         end
         
         -- Different spell types have different parameter requirements
         local result = false
         
+        -- Meta build spell casting logic
         if spell_name == "shadow_clone" then
             result = spell.logics()
             if result then
-                _G.last_shadow_clone_time = current_time -- Track shadow clone cast time
+                _G.last_shadow_clone_time = current_time
                 cast_end_time = current_time + 0.4
-                if is_boss_fight then console.print("Shadow clone cast successfully") end
+                if is_boss_fight then console.print("Shadow Clone: Meta build damage doubling + Unstoppable active") end
                 return
             end
         elseif spell_name == "shadow_imbuement" or 
                spell_name == "poison_imbuement" or 
-               spell_name == "cold_imbuement" or
-               spell_name == "dark_shroud" or
-               spell_name == "concealment" or
-               spell_name == "dance_of_knives" then
-            -- Self-cast spells
+               spell_name == "cold_imbuement" then
+            -- Meta build: Maintain imbuements for damage multipliers
             result = spell.logics()
             if result then
                 cast_end_time = current_time + 0.3
-                if spell_name == "concealment" then
-                    _G.last_concealment_time = current_time
-                    cast_end_time = current_time + 0.6
-                elseif spell_name == "shadow_imbuement" then
-                    _G.last_shadow_imbuement_time = current_time -- Track shadow imbuement cast time
-                elseif spell_name == "dark_shroud" then
-                    _G.last_dark_shroud_time = current_time -- Track dark shroud cast time
+                if spell_name == "shadow_imbuement" then
+                    _G.last_shadow_imbuement_time = current_time
+                    if is_boss_fight then console.print("Shadow Imbuement: Meta build Pit Push variant active") end
                 end
-        return
-    end
-        elseif spell_name == "death_trap" or
-               spell_name == "poison_trap" or
+                return
+            end
+        elseif spell_name == "caltrop" or
                spell_name == "smoke_grenade" or
-               spell_name == "rain_of_arrows" or
-               spell_name == "caltrop" then
-            -- Area spells that need target_list and data
+               spell_name == "poison_trap" then
+            -- Meta build: Area control spells for damage multipliers on elites/bosses
             result = spell.logics(target_list, target_selector_data_all, best_target)
             if result then
-                cast_end_time = current_time + (spell_name == "death_trap" and 0.05 or 0.3)
-                if spell_name == "death_trap" then
-                    _G.last_death_trap_time = current_time
-                elseif spell_name == "caltrop" then
-                    _G.last_caltrop_time = current_time -- Track caltrop cast time
+                cast_end_time = current_time + 0.3
+                if spell_name == "caltrop" then
+                    _G.last_caltrop_time = current_time
+                    if is_boss_fight then console.print("Caltrops: Meta build damage multiplier deployed") end
                 elseif spell_name == "smoke_grenade" then
-                    _G.last_smoke_grenade_time = current_time -- Track smoke grenade cast time
+                    _G.last_smoke_grenade_time = current_time
+                    if is_boss_fight then console.print("Smoke Grenade: Meta build elite/boss damage deployed") end
                 elseif spell_name == "poison_trap" then
-                    _G.last_poison_trap_time = current_time -- Track poison trap cast time
+                    _G.last_poison_trap_time = current_time
+                    if is_boss_fight then console.print("Poison Trap: Meta build Pit Push variant deployed") end
                 end
-                if is_boss_fight then console.print(spell_name .. " cast successfully") end
-        return
-    end
-        elseif spell_name == "shadow_step" then
-            -- Special case for shadow step
-            result = spell.logics(target_list, target_selector_data_all, best_target, closest_target)
-            if result then
-                _G.last_shadow_step_time = current_time -- Track shadow step cast time
-                cast_end_time = current_time + 0.2
                 return
             end
-        elseif spell_name == "evade" then
-            -- Special case for evade
-            result = spell.logics(best_target)
-            if result then
-                cast_end_time = current_time + 0.2
-                return
-            end
-        elseif spell_name == "dash" then
-            -- Special case for dash
-            result = spell.logics(best_target)
-            if result then
-                _G.last_dash_time = current_time -- Track dash cast time
-                cast_end_time = current_time + 0.2
-                return
+        elseif spell_name == "dash" or spell_name == "shadow_step" then
+            -- Meta build: Mobility spells for positioning and Momentum
+            if spell_name == "dash" then
+                result = spell.logics(best_target)
+                if result then
+                    _G.last_dash_time = current_time
+                    cast_end_time = current_time + 0.2
+                    if is_boss_fight then console.print("Dash: Meta build mobility used") end
+                    return
+                end
+            elseif spell_name == "shadow_step" then
+                result = spell.logics(target_list, target_selector_data_all, best_target, closest_target)
+                if result then
+                    _G.last_shadow_step_time = current_time
+                    cast_end_time = current_time + 0.2
+                    if is_boss_fight then console.print("Shadow Step: Meta build mobility used") end
+                    return
+                end
             end
         elseif spell_name == "heartseeker" then
             -- Special case for heartseeker that uses sorted entity list
@@ -1292,7 +1292,7 @@ safe_on_update(function()
         ::continue::
     end
 
-    -- Final penetrating shot spam after other spells (like boss mode)
+    -- Meta build: Aggressive Penetrating Shot spamming as primary damage dealer
     while true do
         local spell = spells["penetrating_shot"]
         if not spell or not spell.logics then break end
@@ -1301,10 +1301,11 @@ safe_on_update(function()
         if not utility.is_spell_ready(377137) then break end
         local result = spell.logics(target_list, target_selector_data_all, best_target)
         if not result then break end
-        cast_end_time = current_time + 0.05  -- Fast casting like boss mode
+        cast_end_time = current_time + 0.02  -- Ultra-fast casting for meta build damage output
+        if is_boss_fight then console.print("Penetrating Shot: Meta build primary damage spam") end
     end
 
-    -- Auto-play movement logic
+    -- Auto-play movement logic with wall bounce optimization
     if current_time >= can_move and my_utility.is_auto_play_enabled() then
         local is_dangerous = false
         -- Safely check if evade has is_dangerous_position function
@@ -1313,6 +1314,41 @@ safe_on_update(function()
         end
         
         if not is_dangerous then
+            -- Check for wall bounce positioning opportunities
+            local best_target = best_target or target_selector_data_all and target_selector_data_all.best_target
+            if best_target and best_target:is_enemy() then
+                local target_pos = best_target:get_position()
+                
+                -- Check if we're near walls for bounce optimization
+                local is_near_wall = false
+                for i = 1, 4 do
+                    local angle = (i - 1) * (math.pi / 2)
+                    local test_direction = vec3.new(math.cos(angle), math.sin(angle), 0)
+                    local test_position = player_position:add(test_direction:multiply(20.0))
+                    
+                    if prediction.is_wall_collision(player_position, test_position, 0.15) then
+                        is_near_wall = true
+                        break
+                    end
+                end
+                
+                -- If near walls, try to position behind enemy for optimal bounce
+                if is_near_wall then
+                    local enemy_to_player = player_position:subtract(target_pos):normalize()
+                    local behind_enemy_pos = target_pos:add(enemy_to_player:multiply(6.0))
+                    
+                    -- Check if we can move to this position
+                    if not prediction.is_wall_collision(player_position, behind_enemy_pos, 0.15) then
+                        if safe_pathfinder_move_to_cpathfinder(behind_enemy_pos) then
+                            can_move = current_time + 2.0
+                            if is_boss_fight then console.print("Movement: Positioning behind enemy for wall bounce optimization") end
+                            return
+                        end
+                    end
+                end
+            end
+            
+            -- Standard movement logic (fallback)
             local closer_target = safe_target_selector_get_target_closer(player_position, 15.0)
             if closer_target then
                 local move_pos = closer_target:get_position():get_extended(player_position, 4.0)
@@ -1323,10 +1359,18 @@ safe_on_update(function()
         end
     end
 
-    -- Out of combat evade
+    -- Out of combat evade (with throttling to reduce spam)
     if spells.evade and spells.evade.menu_elements and safe_get_menu_element(spells.evade.menu_elements.use_out_of_combat, false) then
-        if spells.evade.out_of_combat() then
-                    return
+        local current_time = get_time_since_inject()
+        local last_ooc_evade_check = _G.last_ooc_evade_check or 0
+        local ooc_evade_check_interval = 1.0 -- Check out-of-combat evade every 1 second
+        
+        if current_time - last_ooc_evade_check >= ooc_evade_check_interval then
+            _G.last_ooc_evade_check = current_time
+            
+            if spells.evade.out_of_combat() then
+                return
+            end
         end
     end
     
@@ -1366,11 +1410,21 @@ safe_on_update(function()
     end
 end)
 
--- Enhanced rendering logic
+-- Enhanced rendering logic with performance optimization
 safe_on_render(function()
     if not safe_get_menu_element(menu.menu_elements.main_boolean, false) or not safe_get_menu_element(menu.menu_elements.enable_debug, false) then
         return
     end
+
+    -- Performance optimization: Throttle debug rendering to reduce stuttering
+    local current_time = get_time_since_inject()
+    local last_debug_render_time = _G.last_debug_render_time or 0
+    local debug_render_interval = 0.1 -- Render debug info every 100ms instead of every frame
+    
+    if current_time - last_debug_render_time < debug_render_interval then
+        return
+    end
+    _G.last_debug_render_time = current_time
 
     local local_player = safe_get_local_player()
     if not local_player then
@@ -1383,53 +1437,57 @@ safe_on_render(function()
         return
     end
 
-    -- Draw player range circles
+    -- Draw player range circles (reduced segments for better performance)
     if safe_get_menu_element(menu.menu_elements.draw_max_range, false) then
-        safe_graphics_circle_3d(player_position, safe_get_menu_element(menu.menu_elements.max_targeting_range, 30), color_white(85), 3.5, 144)
+        safe_graphics_circle_3d(player_position, safe_get_menu_element(menu.menu_elements.max_targeting_range, 30), color_white(85), 3.5, 72) -- Reduced from 144 to 72
     end
     
     if safe_get_menu_element(menu.menu_elements.draw_melee_range, false) then
-        safe_graphics_circle_3d(player_position, 7.0, color_white(85), 2.5, 144)
+        safe_graphics_circle_3d(player_position, 7.0, color_white(85), 2.5, 72) -- Reduced from 144 to 72
     end
 
     -- Draw cursor target radius
     if safe_get_menu_element(menu.menu_elements.draw_cursor_target, false) then
         local cursor_position = safe_get_cursor_position()
-        safe_graphics_circle_3d(cursor_position, safe_get_menu_element(menu.menu_elements.cursor_targeting_radius, 5.0), color_yellow(85), 1.0, 72)
+        safe_graphics_circle_3d(cursor_position, safe_get_menu_element(menu.menu_elements.cursor_targeting_radius, 5.0), color_yellow(85), 1.0, 36) -- Reduced from 72 to 36
     end
 
-    -- Draw enemy circles and positions
+    -- Draw enemy circles and positions (limited to first 10 enemies for performance)
     if safe_get_menu_element(menu.menu_elements.draw_enemy_circles, false) then
-        for _, obj in ipairs(safe_actors_manager_get_enemy_npcs()) do
+        local enemies = safe_actors_manager_get_enemy_npcs()
+        local enemy_count = 0
+        for _, obj in ipairs(enemies) do
+            if enemy_count >= 10 then break end -- Limit to 10 enemies for performance
             local position = obj:get_position()
-            safe_graphics_circle_3d(position, 1, color_white(100))
-            safe_graphics_circle_3d(safe_prediction_get_future_unit_position(obj, 0.4), 0.5, color_yellow(100))
+            safe_graphics_circle_3d(position, 1, color_white(100), 1.0, 18) -- Reduced segments
+            safe_graphics_circle_3d(safe_prediction_get_future_unit_position(obj, 0.4), 0.5, color_yellow(100), 1.0, 12) -- Reduced segments
+            enemy_count = enemy_count + 1
         end
     end
 
-    -- Draw targets
+    -- Draw targets (reduced segments for better performance)
     if safe_get_menu_element(menu.menu_elements.draw_targets, false) then
         -- Draw best ranged target
         if best_ranged_target then
-            safe_graphics_circle_3d(best_ranged_target:get_position(), 1.5, color_green(150), 2.0, 36)
+            safe_graphics_circle_3d(best_ranged_target:get_position(), 1.5, color_green(150), 2.0, 24) -- Reduced from 36 to 24
         end
         
         -- Draw best melee target
         if best_melee_target then
-            safe_graphics_circle_3d(best_melee_target:get_position(), 1.5, color_blue(150), 2.0, 36)
+            safe_graphics_circle_3d(best_melee_target:get_position(), 1.5, color_blue(150), 2.0, 24) -- Reduced from 36 to 24
         end
         
         -- Draw cursor targets
         if best_cursor_target then
-            safe_graphics_circle_3d(best_cursor_target:get_position(), 1.5, color_purple(150), 2.0, 36)
+            safe_graphics_circle_3d(best_cursor_target:get_position(), 1.5, color_purple(150), 2.0, 24) -- Reduced from 36 to 24
         end
         
         if closest_cursor_target then
-            safe_graphics_circle_3d(closest_cursor_target:get_position(), 1.5, color_red(150), 2.0, 36)
+            safe_graphics_circle_3d(closest_cursor_target:get_position(), 1.5, color_red(150), 2.0, 24) -- Reduced from 36 to 24
         end
     end
 
-    -- Call enhanced rendering if debug is enabled
+    -- Call enhanced rendering if debug is enabled (with throttling)
     enhancements_manager.on_render(menu.menu_elements)
 end);
 

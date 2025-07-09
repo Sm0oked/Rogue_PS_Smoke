@@ -22,6 +22,11 @@ local menu_elements =
 
     spell_range   = slider_float:new(1.0, 15.0, 10.0, get_hash(my_utility.plugin_label .. "pen_shot_base_spell_range")),
     spell_radius   = slider_float:new(0.50, 5.0, 1.50, get_hash(my_utility.plugin_label .. "pen_shot_base_spell_radius")),
+    
+    -- Wall bounce optimization for Eaglehorn ricochet mechanics
+    enable_wall_bounce    = checkbox:new(true, get_hash(my_utility.plugin_label .. "pen_shot_wall_bounce_enable")),
+    wall_bounce_min_hits  = slider_int:new(2, 10, 3, get_hash(my_utility.plugin_label .. "pen_shot_wall_bounce_min_hits")),
+    auto_position_bounce  = checkbox:new(true, get_hash(my_utility.plugin_label .. "pen_shot_auto_position_bounce")),
 }
 
 local function render_menu()
@@ -46,6 +51,13 @@ local function render_menu()
         menu_elements.spell_range:render("Spell Range", "", 1)
         menu_elements.spell_radius:render("Spell Radius", "", 1)
 
+        -- Wall bounce optimization options
+        menu_elements.enable_wall_bounce:render("Enable Wall Bounce", "Optimize penetrating shot for Eaglehorn ricochet mechanics")
+        if menu_elements.enable_wall_bounce:get() then
+            menu_elements.wall_bounce_min_hits:render("Min Bounce Hits", "Minimum hits required to use wall bounce optimization", 1)
+            menu_elements.auto_position_bounce:render("Auto Position for Bounce", "Automatically position behind enemies for optimal bounce setup", 1)
+        end
+
         menu_elements.tree_tab:pop();
     end
 end
@@ -63,6 +75,103 @@ local spell_data_penetration_shot = spell_data:new(
 )
 local next_time_allowed_cast = 0.0;
 local global_penetration_shot_last_cast_position = nil;
+
+-- Wall bounce optimization for Eaglehorn ricochet mechanics
+local function find_optimal_wall_bounce_position(player_position, target_position, spell_range)
+    local optimal_cast_position = target_position
+    local max_hits = 0
+    
+    -- Check 8 directions around the target for wall bounce opportunities
+    for i = 1, 8 do
+        local angle = (i - 1) * (2 * math.pi / 8)
+        local test_direction = vec3.new(math.cos(angle), math.sin(angle), 0)
+        
+        -- Test position at spell range in this direction
+        local test_position = nil
+        local test_success = pcall(function()
+            test_position = player_position:add(test_direction:multiply(spell_range))
+        end)
+        
+        if test_success and test_position then
+            -- Check if this position would hit a wall
+            local wall_collision = prediction.is_wall_collision(player_position, test_position, 0.15)
+            
+            if wall_collision then
+                -- Calculate potential hits from ricochet
+                local ricochet_hits = 0
+                
+                -- Count enemies that would be hit by the initial shot
+                local initial_hits = my_utility.enemy_count_in_range(1.5, player_position)
+                ricochet_hits = ricochet_hits + initial_hits
+                
+                -- Count enemies that would be hit by the ricochet (bounce back)
+                local bounce_direction = nil
+                local bounce_success = pcall(function()
+                    bounce_direction = player_position:subtract(test_position):normalize()
+                end)
+                
+                if bounce_success and bounce_direction then
+                    local bounce_position = nil
+                    local bounce_pos_success = pcall(function()
+                        bounce_position = test_position:add(bounce_direction:multiply(spell_range * 0.5))
+                    end)
+                    
+                    if bounce_pos_success and bounce_position then
+                        local bounce_hits = my_utility.enemy_count_in_range(1.5, bounce_position)
+                        ricochet_hits = ricochet_hits + bounce_hits
+                    end
+                end
+                
+                -- Update optimal position if this gives more hits
+                if ricochet_hits > max_hits then
+                    max_hits = ricochet_hits
+                    optimal_cast_position = test_position
+                end
+            end
+        end
+    end
+    
+    return optimal_cast_position, max_hits
+end
+
+-- Find optimal player position for wall bounce setup
+local function find_optimal_player_position_for_bounce(player_position, target_position, spell_range)
+    local optimal_player_pos = player_position
+    local max_bounce_hits = 0
+    
+    -- Check positions behind the enemy (opposite side from player)
+    local enemy_to_player = nil
+    local direction_success = pcall(function()
+        enemy_to_player = player_position:subtract(target_position):normalize()
+    end)
+    
+    if direction_success and enemy_to_player then
+        -- Test positions behind the enemy
+        for distance = 2.0, 8.0, 2.0 do
+            local behind_enemy_pos = nil
+            local behind_success = pcall(function()
+                behind_enemy_pos = target_position:add(enemy_to_player:multiply(distance))
+            end)
+            
+            if behind_success and behind_enemy_pos then
+                -- Check if we can move to this position
+                local can_move_there = not prediction.is_wall_collision(player_position, behind_enemy_pos, 0.15)
+                
+                if can_move_there then
+                    -- Calculate potential bounce hits from this position
+                    local bounce_position, bounce_hits = find_optimal_wall_bounce_position(behind_enemy_pos, target_position, spell_range)
+                    
+                    if bounce_hits > max_bounce_hits then
+                        max_bounce_hits = bounce_hits
+                        optimal_player_pos = behind_enemy_pos
+                    end
+                end
+            end
+        end
+    end
+    
+    return optimal_player_pos, max_bounce_hits
+end
 
 local function logics(entity_list, target_selector_data, best_target)
     
@@ -153,17 +262,78 @@ local function logics(entity_list, target_selector_data, best_target)
         return false
     end
     
-    -- In boss fights, try to find a better cast position to avoid wall collision
-    if is_boss_fight and target_to_cast_at then
-        local boss_pos = nil
-        local success = pcall(function()
-            boss_pos = target_to_cast_at:get_position()
-        end)
+    -- Wall bounce optimization for Eaglehorn ricochet mechanics
+    local target_pos = nil
+    local target_success = pcall(function()
+        target_pos = target_to_cast_at:get_position()
+    end)
+    
+    if not target_success or not target_pos then
+        console.print("Penetrating shot: Failed to get target position")
+        return false
+    end
+    
+    -- Check if we're near walls for bounce optimization (only if enabled)
+    local is_near_wall = false
+    local wall_bounce_position = target_pos
+    local bounce_hits = 0
+    
+    if menu_elements.enable_wall_bounce:get() then
+        -- Test if there are walls nearby for ricochet opportunities
+        for i = 1, 4 do
+            local angle = (i - 1) * (math.pi / 2)
+            local test_direction = vec3.new(math.cos(angle), math.sin(angle), 0)
+            local test_position = nil
+            
+            local test_success = pcall(function()
+                test_position = player_position:add(test_direction:multiply(spell_range))
+            end)
+            
+            if test_success and test_position then
+                local wall_collision = prediction.is_wall_collision(player_position, test_position, 0.15)
+                if wall_collision then
+                    is_near_wall = true
+                    break
+                end
+            end
+        end
         
-        if success and boss_pos then
+        -- If near walls, optimize for bounce effects
+        if is_near_wall then
+            local optimal_bounce_pos, optimal_bounce_hits = find_optimal_wall_bounce_position(player_position, target_pos, spell_range)
+            local min_bounce_hits = menu_elements.wall_bounce_min_hits:get()
+            
+            if optimal_bounce_hits >= min_bounce_hits then -- Only use bounce if it meets minimum hit requirement
+                wall_bounce_position = optimal_bounce_pos
+                bounce_hits = optimal_bounce_hits
+                
+                -- Try to position player behind enemy for optimal bounce setup (if auto-positioning is enabled)
+                if menu_elements.auto_position_bounce:get() then
+                    local optimal_player_pos, player_bounce_hits = find_optimal_player_position_for_bounce(player_position, target_pos, spell_range)
+                    
+                    if player_bounce_hits > bounce_hits then
+                        -- Suggest movement to optimal position (this would be handled by movement system)
+                        console.print("Penetrating shot: Optimal bounce position found - " .. player_bounce_hits .. " potential hits")
+                        wall_bounce_position = optimal_bounce_pos
+                        bounce_hits = player_bounce_hits
+                    end
+                end
+                
+                console.print("Penetrating shot: Wall bounce optimization - " .. bounce_hits .. " potential ricochet hits")
+            end
+        end
+    end
+    
+    -- In boss fights, use wall bounce if available, otherwise use standard positioning
+    if is_boss_fight then
+        if is_near_wall and bounce_hits > 1 then
+            cast_position = wall_bounce_position
+            console.print("Penetrating shot: Using wall bounce position for boss fight - " .. bounce_hits .. " hits")
+        else
+            -- Fallback to standard boss positioning
             local direction = nil
             local dir_success = pcall(function()
-                direction = boss_pos:subtract(player_position)
+                direction = target_pos:subtract(player_position)
             end)
             
             if dir_success and direction and direction:length_3d() > 0 then
@@ -183,35 +353,44 @@ local function logics(entity_list, target_selector_data, best_target)
                         cast_position = offset_pos
                         console.print("Penetrating shot: Using offset position for boss fight")
                     else
-                        cast_position = boss_pos
+                        cast_position = target_pos
                         console.print("Penetrating shot: Offset calculation failed, using direct boss position")
                     end
                 else
-                    cast_position = boss_pos
+                    cast_position = target_pos
                     console.print("Penetrating shot: Direction normalization failed, using direct boss position")
                 end
             else
-                cast_position = boss_pos
+                cast_position = target_pos
                 console.print("Penetrating shot: Direction calculation failed, using direct boss position")
             end
-        else
-            console.print("Penetrating shot: Boss position is nil, using direct target position")
-            cast_position = target_to_cast_at:get_position()
         end
     else
-        cast_position = target_to_cast_at:get_position()
+        -- Use wall bounce position if available and beneficial
+        if is_near_wall and bounce_hits > 1 then
+            cast_position = wall_bounce_position
+        else
+            cast_position = target_pos
+        end
     end
     
-    -- Skip wall collision check in boss fights since bosses can be positioned in ways that trigger false positives
+    -- Wall collision check - allow intentional wall hits for bounce optimization
     local is_wall_collision = false
     if not is_boss_fight then
         is_wall_collision = prediction.is_wall_collision(player_position, cast_position, 0.15)
-        if is_wall_collision then
-            console.print("Penetrating shot: Wall collision detected")
+        if is_wall_collision and not (is_near_wall and menu_elements.enable_wall_bounce:get()) then
+            -- Only block if we're not intentionally using wall bounce
+            console.print("Penetrating shot: Unintentional wall collision detected")
             return false
+        elseif is_wall_collision and is_near_wall and menu_elements.enable_wall_bounce:get() then
+            console.print("Penetrating shot: Intentional wall bounce for Eaglehorn ricochet effect")
         end
     else
-        console.print("Penetrating shot: Skipping wall collision check for boss fight")
+        if is_near_wall and menu_elements.enable_wall_bounce:get() then
+            console.print("Penetrating shot: Using wall bounce in boss fight for Eaglehorn ricochet")
+        else
+            console.print("Penetrating shot: Standard boss fight positioning")
+        end
     end
 
     -- Simple and fast casting

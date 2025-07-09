@@ -1,24 +1,23 @@
 -- Spell priority configuration for Rogue class
--- NEW: Custom rotation as per latest fighting logic
--- 1. Caltrops (overlap before expiring)
--- 2. Smoke Grenade
--- 3. Poison Trap
--- 4. Shadow Imbuement (always maintain)
--- 5. Shadow Clone (every 5 seconds)
--- 6. Penetrating Shot (spam)
--- 7. Dash and Shadow Step for mobility
--- 8. Dark Shroud (added for additional utility)
+-- UPDATED: Meta build rotation from Mobalytics Penetrating Shot guide
+-- 1. Caltrops (damage multiplier on elites/bosses)
+-- 2. Smoke Grenade (more damage on elites/bosses)
+-- 3. Poison Trap (Pit Push variant)
+-- 4. Shadow Imbuement (Pit Push variant)
+-- 5. Shadow Clone (every 5 seconds - doubles damage + Unstoppable)
+-- 6. Penetrating Shot (primary damage dealer - spam aggressively)
+-- 7. Dash (mobility)
+-- 8. Shadow Step (mobility)
 
 local spell_priority = {
     "caltrop",
-    "smoke_grenade",
+    "smoke_grenade", 
     "poison_trap",
     "shadow_imbuement",
     "shadow_clone",
     "penetrating_shot",
     "dash",
-    "shadow_step",
-    "dark_shroud"
+    "shadow_step"
 }
 
 return spell_priority

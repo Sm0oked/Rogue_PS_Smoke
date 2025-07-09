@@ -115,7 +115,15 @@ local function is_action_allowed()
     
     local player_position = local_player:get_position();
     if evade and evade.is_dangerous_position and evade.is_dangerous_position(player_position) then
-        console.print("I CANT ATTACK - EVADE BLOCK!!!!!!")
+        -- Throttle this message to reduce spam
+        local current_time = get_time_since_inject()
+        local last_evade_block_message = _G.last_evade_block_message or 0
+        local evade_block_message_interval = 2.0 -- Show message every 2 seconds instead of every frame
+        
+        if current_time - last_evade_block_message >= evade_block_message_interval then
+            _G.last_evade_block_message = current_time
+            console.print("I CANT ATTACK - EVADE BLOCK!!!!!!")
+        end
         return false;
     end
 
@@ -175,9 +183,6 @@ local function is_spell_allowed(spell_enable_check, next_cast_allowed_time, spel
         return false;
     end;
 
-    -- "Combo & Clear", "Combo Only", "Clear Only"
-    -- local current_cast_mode = spell_cast_mode
-    
     -- evade abort - make this check safer since evade might not be initialized properly
     local should_check_evade = true
     local local_player = get_local_player()
@@ -192,18 +197,26 @@ local function is_spell_allowed(spell_enable_check, next_cast_allowed_time, spel
         end
     end
 
-    -- -- automatic
-    -- if current_cast_mode == 4 then
-    --     return true
-    -- end
+    -- Special handling for penetrating shot - allow it to work like fast mode
+    if spell_id == 377137 then -- penetrating shot spell ID
+        if is_auto_play_enabled() then
+            return true;
+        end
+        
+        -- For penetrating shot, be more permissive with orbwalker modes
+        local current_orb_mode = orbwalker and orbwalker.get_orb_mode and orbwalker.get_orb_mode() or 0
+        
+        -- Allow penetrating shot in any mode except none
+        if current_orb_mode ~= orb_mode.none then
+            return true;
+        end
+        
+        return false;
+    end
 
     if is_auto_play_enabled() then
         return true;
     end
-
-    -- local is_pvp_or_clear = current_cast_mode == 0
-    -- local is_pvp_only = current_cast_mode == 1
-    -- local is_clear_only = current_cast_mode == 2
 
     local current_orb_mode = orbwalker and orbwalker.get_orb_mode and orbwalker.get_orb_mode() or 0
     
@@ -213,24 +226,11 @@ local function is_spell_allowed(spell_enable_check, next_cast_allowed_time, spel
 
     local is_current_orb_mode_pvp = current_orb_mode == orb_mode.pvp
     local is_current_orb_mode_clear = current_orb_mode == orb_mode.clear
-    -- local is_current_orb_mode_flee = current_orb_mode == orb_mode.flee
     
-    -- if is_pvp_only and not is_current_orb_mode_pvp then
-    --     return false
-    -- end
-
-    -- if is_clear_only and not is_current_orb_mode_clear then
-    --     return false
-    -- end
-
      -- is pvp or clear (both)
      if not is_current_orb_mode_pvp and not is_current_orb_mode_clear then
         return false;
     end
-
-    -- we already checked everything that we wanted. If orb = none, we return false. 
-    -- PVP only & not pvp mode, return false . PvE only and not pve mode, return false.
-    -- All checks passed at this point so we can go ahead with the logics
 
     return true
 end
