@@ -1101,16 +1101,20 @@ safe_on_update(function()
     local spell = spells["penetrating_shot"]
     if spell and spell.logics and utility.is_spell_ready(377137) and 
        (not spell.menu_elements or spell.menu_elements.main_boolean:get()) then
-        -- Check if slow penetrating shot is enabled
+        -- Check if slow penetrating shot is enabled and apply cooldown
+        local last_penetrating_shot_time = _G.last_penetrating_shot_time or 0
         local cast_delay = safe_get_menu_element(menu.menu_elements.slow_penetrating_shot, false) and 
                           safe_get_menu_element(menu.menu_elements.slow_penetrating_shot_delay, 0.01) or 0.001
         
-        local result = spell.logics(target_list, target_selector_data_all, best_target)
-        if result then
-            cast_end_time = current_time + cast_delay -- Use configurable delay
-            return -- Exit after casting penetrating shot to prioritize it
-        elseif is_boss_fight then
-            console.print("Penetrating shot failed to cast in boss fight")
+        -- Check if enough time has passed since last cast
+        if current_time - last_penetrating_shot_time >= cast_delay then
+            local result = spell.logics(target_list, target_selector_data_all, best_target)
+            if result then
+                cast_end_time = current_time + 0.1 -- Small delay for next frame
+                return -- Exit after casting penetrating shot to prioritize it
+            elseif is_boss_fight then
+                console.print("Penetrating shot failed to cast in boss fight")
+            end
         end
     end
     
@@ -1330,14 +1334,18 @@ safe_on_update(function()
     local spell = spells["penetrating_shot"]
     if spell and spell.logics and utility.is_spell_ready(377137) and 
        (not spell.menu_elements or spell.menu_elements.main_boolean:get()) then
-        -- Check if slow penetrating shot is enabled
+        -- Check if slow penetrating shot is enabled and apply cooldown
+        local last_penetrating_shot_time = _G.last_penetrating_shot_time or 0
         local cast_delay = safe_get_menu_element(menu.menu_elements.slow_penetrating_shot, false) and 
                           safe_get_menu_element(menu.menu_elements.slow_penetrating_shot_delay, 0.01) or 0.001
         
-        local result = spell.logics(target_list, target_selector_data_all, best_target)
-        if result then
-            cast_end_time = current_time + cast_delay  -- Use configurable delay
-            if is_boss_fight then console.print("Penetrating Shot: Meta build primary damage spam") end
+        -- Check if enough time has passed since last cast
+        if current_time - last_penetrating_shot_time >= cast_delay then
+            local result = spell.logics(target_list, target_selector_data_all, best_target)
+            if result then
+                cast_end_time = current_time + 0.1 -- Small delay for next frame
+                if is_boss_fight then console.print("Penetrating Shot: Meta build primary damage spam") end
+            end
         end
     end
 
