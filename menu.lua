@@ -7,6 +7,7 @@ local menu_elements =
     mode                = combo_box:new(0, get_hash((my_utility and my_utility.plugin_label or "death_trap_rogue_") .. "mode_melee_range")),
     evade_cooldown      = slider_int:new(0, 20, 6, get_hash((my_utility and my_utility.plugin_label or "death_trap_rogue_") .. "evade_cooldown")),
     boss_mode           = checkbox:new(false, get_hash((my_utility and my_utility.plugin_label or "death_trap_rogue_") .. "boss_mode")),
+    slow_penetrating_shot = checkbox:new(false, get_hash((my_utility and my_utility.plugin_label or "death_trap_rogue_") .. "slow_penetrating_shot")),
     
     -- Advanced settings
     settings_tree       = tree_node:new(1),
@@ -69,6 +70,7 @@ local menu_elements =
 local draw_targets_description = "Display target selection information"
 local cursor_target_description = "Visualize cursor targeting radius"
 local boss_mode_description = "Aggressively spam penetrating shot and all spells off cooldown for maximum damage"
+local slow_penetrating_shot_description = "Cast penetrating shot slower (~0.01s delay) instead of rapid spam"
 local enhanced_targeting_description = "Enable enhanced targeting system"
 local enhanced_evade_description = "Enable enhanced evade system with dash and shadow step integration"
 local auto_resource_description = "Automatically manage resources for optimal spell usage"
@@ -81,6 +83,7 @@ return {
     draw_targets_description = draw_targets_description,
     cursor_target_description = cursor_target_description,
     boss_mode_description = boss_mode_description,
+    slow_penetrating_shot_description = slow_penetrating_shot_description,
     enhanced_targeting_description = enhanced_targeting_description,
     enhanced_evade_description = enhanced_evade_description,
     auto_resource_description = auto_resource_description,

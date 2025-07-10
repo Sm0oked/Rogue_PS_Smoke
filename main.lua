@@ -368,6 +368,7 @@ safe_on_render_menu(function()
     menu.menu_elements.mode:render("Mode", options, "")
     menu.menu_elements.evade_cooldown:render("Evade Cooldown", "")
     menu.menu_elements.boss_mode:render("Boss Mode", menu.boss_mode_description)
+    menu.menu_elements.slow_penetrating_shot:render("Slow Penetrating Shot", menu.slow_penetrating_shot_description)
 
     if menu.menu_elements.settings_tree:push("Settings") then
         menu.menu_elements.enemy_count_threshold:render("Minimum Enemy Count",
@@ -1093,14 +1094,16 @@ safe_on_update(function()
         end
     end
     
-    -- Cast penetrating shot as rapidly as possible (hold button behavior)
+    -- Cast penetrating shot with configurable speed
     local spell = spells["penetrating_shot"]
     if spell and spell.logics and utility.is_spell_ready(377137) and 
        (not spell.menu_elements or spell.menu_elements.main_boolean:get()) then
-        -- Cast every frame for maximum speed (hold button behavior)
+        -- Check if slow penetrating shot is enabled
+        local cast_delay = safe_get_menu_element(menu.menu_elements.slow_penetrating_shot, false) and 0.01 or 0.001
+        
         local result = spell.logics(target_list, target_selector_data_all, best_target)
         if result then
-            cast_end_time = current_time + 0.01 -- Minimal delay for rapid casting
+            cast_end_time = current_time + cast_delay -- Use configurable delay
             return -- Exit after casting penetrating shot to prioritize it
         elseif is_boss_fight then
             console.print("Penetrating shot failed to cast in boss fight")
@@ -1319,13 +1322,16 @@ safe_on_update(function()
         ::continue::
     end
 
-    -- Meta build: Cast Penetrating Shot as rapidly as possible (hold button behavior)
+    -- Meta build: Cast Penetrating Shot with configurable speed
     local spell = spells["penetrating_shot"]
     if spell and spell.logics and utility.is_spell_ready(377137) and 
        (not spell.menu_elements or spell.menu_elements.main_boolean:get()) then
+        -- Check if slow penetrating shot is enabled
+        local cast_delay = safe_get_menu_element(menu.menu_elements.slow_penetrating_shot, false) and 0.01 or 0.001
+        
         local result = spell.logics(target_list, target_selector_data_all, best_target)
         if result then
-            cast_end_time = current_time + 0.001  -- Ultra-fast casting for hold button behavior
+            cast_end_time = current_time + cast_delay  -- Use configurable delay
             if is_boss_fight then console.print("Penetrating Shot: Meta build primary damage spam") end
         end
     end
