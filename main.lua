@@ -369,6 +369,9 @@ safe_on_render_menu(function()
     menu.menu_elements.evade_cooldown:render("Evade Cooldown", "")
     menu.menu_elements.boss_mode:render("Boss Mode", menu.boss_mode_description)
     menu.menu_elements.slow_penetrating_shot:render("Slow Penetrating Shot", menu.slow_penetrating_shot_description)
+    if safe_get_menu_element(menu.menu_elements.slow_penetrating_shot, false) then
+        menu.menu_elements.slow_penetrating_shot_delay:render("Penetrating Shot Delay", menu.slow_penetrating_shot_delay_description, 3)
+    end
 
     if menu.menu_elements.settings_tree:push("Settings") then
         menu.menu_elements.enemy_count_threshold:render("Minimum Enemy Count",
@@ -1099,7 +1102,8 @@ safe_on_update(function()
     if spell and spell.logics and utility.is_spell_ready(377137) and 
        (not spell.menu_elements or spell.menu_elements.main_boolean:get()) then
         -- Check if slow penetrating shot is enabled
-        local cast_delay = safe_get_menu_element(menu.menu_elements.slow_penetrating_shot, false) and 0.01 or 0.001
+        local cast_delay = safe_get_menu_element(menu.menu_elements.slow_penetrating_shot, false) and 
+                          safe_get_menu_element(menu.menu_elements.slow_penetrating_shot_delay, 0.01) or 0.001
         
         local result = spell.logics(target_list, target_selector_data_all, best_target)
         if result then
@@ -1327,7 +1331,8 @@ safe_on_update(function()
     if spell and spell.logics and utility.is_spell_ready(377137) and 
        (not spell.menu_elements or spell.menu_elements.main_boolean:get()) then
         -- Check if slow penetrating shot is enabled
-        local cast_delay = safe_get_menu_element(menu.menu_elements.slow_penetrating_shot, false) and 0.01 or 0.001
+        local cast_delay = safe_get_menu_element(menu.menu_elements.slow_penetrating_shot, false) and 
+                          safe_get_menu_element(menu.menu_elements.slow_penetrating_shot_delay, 0.01) or 0.001
         
         local result = spell.logics(target_list, target_selector_data_all, best_target)
         if result then
